@@ -1,0 +1,9 @@
+{
+  "name": "wechat-tracemoe",
+  "dependencies": {
+    "axios": "^1.6.0",
+    "express": "^4.18.2",
+    "multer": "^1.4.5-lts.1",
+    "xml2js": "^0.6.2"
+  }
+}
