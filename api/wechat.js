@@ -12,8 +12,8 @@ const upload = multer({ dest: '/tmp/' }); // Vercel 临时文件目录
 
 // ===================== 配置项 =====================
 // 微信公众号测试号的 Token 和 AppID
-const WECHAT_TOKEN = '你的微信Token'; // 自定义一个字符串
-const WECHAT_APPID = '你的测试号AppID';
+const WECHAT_TOKEN = 'wx123'; // 自定义一个字符串
+const WECHAT_APPID = 'wxf1600c0b1c95bcbc';
 // trace.moe 官方API
 const TRACEMOE_API = 'https://api.trace.moe/search';
 // ==================================================
