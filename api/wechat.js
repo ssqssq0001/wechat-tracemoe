@@ -1,101 +1,54 @@
-const crypto = require('crypto');
-const axios = require('axios');
-const xml2js = require('xml2js');
+import crypto from 'crypto';
+import axios from 'axios';
+import xml2js from 'xml2js';
 
+// 配置
 const WECHAT_TOKEN = 'wx123';
-const WECHAT_APPID = 'wxf1600c0b1c95bcbc';
-const TRACEMOE_API = 'https://api.trace.moe/search';
 
-module.exports = async (req, res) => {
-  // ✅ 关键修复：手动读取 raw 请求体
-  let body = '';
-  req.on('data', chunk => {
-    body += chunk;
-  });
-  req.on('end', async () => {
-    if (req.method === 'GET') {
-      const { signature, timestamp, nonce, echostr } = req.query;
-      const arr = [WECHAT_TOKEN, timestamp, nonce].sort();
-      const tmpStr = arr.join('');
-      const sha1 = crypto.createHash('sha1').update(tmpStr).digest('hex');
+// Vercel 官方支持的 POST 读取方式
+export default async function handler(req, res) {
+  // 1. 微信验证 GET
+  if (req.method === 'GET') {
+    const { signature, timestamp, nonce, echostr } = req.query;
+    const arr = [WECHAT_TOKEN, timestamp, nonce].sort().join('');
+    const sha1 = crypto.createHash('sha1').update(arr).digest('hex');
 
-      if (sha1 === signature) {
-        console.log('✅ 微信验证通过！');
-        return res.status(200).send(echostr);
-      } else {
-        console.log('❌ 微信验证失败！');
-        return res.status(403).send('验证失败');
-      }
+    if (sha1 === signature) {
+      console.log("✅ 微信验证成功");
+      return res.send(echostr);
     }
+    return res.send("验证失败");
+  }
 
-    if (req.method === 'POST') {
-      try {
-        console.log('🟢 收到微信POST请求！Body:', body);
-        const msg = await new Promise((resolve, reject) => {
-          xml2js.parseString(body, { explicitArray: false }, (err, result) => {
-            if (err) reject(err);
-            else resolve(result.xml);
-          });
-        });
+  // 2. 微信消息 POST —— Vercel 官方写法！！！
+  if (req.method === 'POST') {
+    console.log("🟢 收到微信 POST 请求！！！！！"); // <-- 只要发消息，这里必打印
+    console.log("内容：", req.body);
 
-        const toUser = msg.ToUserName;
-        const fromUser = msg.FromUserName;
-        const msgType = msg.MsgType;
+    // 解析 XML
+    const msg = await xml2js.parseStringPromise(req.body, { explicitArray: false });
+    const data = msg.xml;
 
-        if (msgType !== 'image') {
-          const reply = buildReply(fromUser, toUser, '请发送动漫截图哦！');
-          res.setHeader('Content-Type', 'application/xml');
-          return res.status(200).send(reply);
-        }
+    // 回复固定文本（先测试通不通）
+    const reply = `
+<xml>
+<ToUserName><![CDATA[${data.FromUserName}]]></ToUserName>
+<FromUserName><![CDATA[${data.ToUserName}]]></FromUserName>
+<CreateTime>${Math.floor(Date.now() / 1000)}</CreateTime>
+<MsgType><![CDATA[text]]></MsgType>
+<Content><![CDATA[🎉 成功收到消息！]]></Content>
+</xml>`;
 
-        const picUrl = msg.PicUrl;
-        console.log('收到图片URL:', picUrl);
-        const traceRes = await axios.get(TRACEMOE_API, { params: { url: picUrl } });
-        const result = traceRes.data.result[0];
+    res.setHeader('Content-Type', 'application/xml');
+    return res.send(reply);
+  }
 
-        if (!result) {
-          const reply = buildReply(fromUser, toUser, '未找到匹配的番剧');
-          res.setHeader('Content-Type', 'application/xml');
-          return res.status(200).send(reply);
-        }
+  res.status(405).send('Method Not Allowed');
+}
 
-        const anilist = result.anilist;
-        const replyText = `
-✅ 搜番结果：
-📺 番名：${anilist.title.native || anilist.title.romaji}
-🎬 集数：第${result.episode}集
-⏱️ 时间：${formatTime(result.from)} - ${formatTime(result.to)}
-🎯 相似度：${(result.similarity * 100).toFixed(2)}%
-        `.trim();
-
-        const replyXml = buildReply(fromUser, toUser, replyText);
-        res.setHeader('Content-Type', 'application/xml');
-        return res.status(200).send(replyXml);
-
-      } catch (err) {
-        console.error('处理消息出错:', err);
-        const reply = buildReply('gh_1665b5cb7630', msg.FromUserName, '搜番失败，请重试');
-        res.setHeader('Content-Type', 'application/xml');
-        return res.status(200).send(reply);
-      }
-    }
-  });
+// 必须加这个！让 Vercel 把原始 body 传给你！
+export const config = {
+  api: {
+    bodyParser: true,
+  },
 };
-
-function buildReply(toUser, fromUser, content) {
-  return `
-  <xml>
-    <ToUserName><![CDATA[${toUser}]]></ToUserName>
-    <FromUserName><![CDATA[${fromUser}]]></FromUserName>
-    <CreateTime>${Math.floor(Date.now() / 1000)}</CreateTime>
-    <MsgType><![CDATA[text]]></MsgType>
-    <Content><![CDATA[${content}]]></Content>
-  </xml>
-  `;
-}
-
-function formatTime(seconds) {
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m}:${s.toString().padStart(2, '0')}`;
-}
