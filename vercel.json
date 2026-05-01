@@ -1,5 +1,7 @@
 {
-  "rewrites": [
-    { "source": "/api/wechat", "destination": "/api/wechat.js" }
-  ]
+  "functions": {
+    "api/wechat.js": {
+      "runtime": "@vercel/node@3"
+    }
+  }
 }
